@@ -41,10 +41,11 @@ import (
 
 const (
 	// KubectlCmd Kubernetes controller command
-	KubectlCmd      = "kubectl"
-	manifestsPath   = "k8sT/manifests/"
-	descriptorsPath = "../examples/kubernetes"
-	kubeDNSLabel    = "k8s-app=kube-dns"
+	KubectlCmd        = "kubectl"
+	manifestsPath     = "k8sT/manifests/"
+	descriptorsPath   = "../examples/kubernetes"
+	kubeDNSLabel      = "k8s-app=kube-dns"
+	operatorPatchName = "cilium-operator-patch.yaml"
 
 	// DNSHelperTimeout is a predefined timeout value for K8s DNS commands. It
 	// must be larger than 5 minutes because kubedns has a hardcoded resync
@@ -877,6 +878,18 @@ func (kub *Kubectl) ciliumInstall(dsPatchName, cmPatchName string, getK8sDescrip
 		return fmt.Errorf("Cilium RBAC descriptor not found")
 	}
 
+	operatorExists := true
+
+	operatorRbacPathname := getK8sDescriptor("cilium-operator-rbac.yaml")
+	if operatorRbacPathname == "" {
+		operatorExists = false
+	}
+
+	operatorPathname := getK8sDescriptor("cilium-operator.yaml")
+	if operatorPathname == "" {
+		operatorExists = false
+	}
+
 	deployOriginal := func(original string) error {
 		// debugYaml only dumps the full created yaml file to the test output if
 		// the cilium manifest can not be created correctly.
@@ -910,6 +923,17 @@ func (kub *Kubectl) ciliumInstall(dsPatchName, cmPatchName string, getK8sDescrip
 	if err := kub.DeployPatch(dsPathname, getK8sDescriptorPatch(dsPatchName)); err != nil {
 		return err
 	}
+
+	if operatorExists {
+		if err := deployOriginal(operatorRbacPathname); err != nil {
+			return err
+		}
+
+		if err := kub.DeployPatch(operatorPathname, getK8sDescriptorPatch(operatorPatchName)); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
